@@ -8,10 +8,38 @@ import tensorflow as tf
 # Function to calculate energy based on the selected date
 # Function to load the pre-trained model
 
-def calculate_energy(selected_date):
-    # model.predict()
-    time.sleep(2)  # Simulating a delay for energy calculation
-    return f"Energy calculated for {selected_date} is 100 kWh"
+def generate_features(date):
+    features = {
+        'dayofyear': date.dayofyear,
+        'hour': date.hour,
+        'dayofweek': date.dayofweek,
+        'quarter': (date.month - 1) // 3 + 1,
+        'month': date.month,
+        'year': date.year
+    }
+    return features
+
+# Function to make predictions using the TensorFlow model
+def predict_energy_export(model, input_sequence, scaler_X, scaler_y):
+    # Convert input_sequence to a NumPy array
+    input_data = np.array([list(feature.values()) for feature in input_sequence])
+
+    # Reshape input_data to match the model's input shape
+    input_data = input_data.reshape((1, SEQUENCE_LENGTH, len(FEATURES)))
+
+    # Make predictions
+    input_data = scaler_X.transform(input_data)
+    predictions = model.predict(input_data)
+    return scaler_y.inverse_transform(predictions[0][0])  # Assuming a single output neuron for regression
+
+# Function to load the TensorFlow model
+def load_tf_model(model_path):
+    return tf.keras.models.load_model(model_path)
+
+# Function to get the last day of the month for a given date
+def last_day_of_month(any_day):
+    next_month = any_day.replace(day=28) + timedelta(days=4)  # go to the 28th, then forward 4 days
+    return next_month - timedelta(days=next_month.day)
 
 # Streamlit app
 def main():
@@ -19,14 +47,40 @@ def main():
 
     # Image
     # st.image("wind-turbine.jpg", caption="Wind Turbine", use_column_width=True)
+    # Input date for prediction
+    input_date_str = input("Enter the date (format: YYYY-MM-DD HH:mm): ")
+    input_date = datetime.strptime(input_date_str, '%Y-%m-%d %H:%M')
 
-    # Date selection
-    selected_date = st.date_input("Select a date", datetime.date.today())
+    # Load the TensorFlow model
+    model_path = 'modelTS.h5'
+    model = load_tf_model(model_path)
 
-    # model_path = r"/modelTs.h5"  # Replace with the actual path to your H5 file
-    # model = load_model(model_path)
-    days = pd.date_range(datetime.date.today(), periods=20, freq='D')
-    energy_produced = np.random.uniform(2500, 4500, 20)
+    scaler_X_path = 'scaler_X.joblib'
+    scaler_y_path = 'scaler_y.joblib'
+
+    # Load the MinMaxScaler
+    scaler_X = joblib.load(scaler_X_path)
+    scaler_y = joblib.load(scaler_y_path)
+
+    # Initialize input_sequence with default values
+    input_sequence = [generate_features(input_date - timedelta(minutes=i * 10)) for i in range(SEQUENCE_LENGTH)]
+
+    # Generate predictions until the end of the month
+    last_day = last_day_of_month(input_date)
+    current_date = input_date
+
+    while current_date <= last_day:
+        # Make prediction
+        prediction = predict_energy_export(model, input_sequence, scaler_X, scaler_y)
+
+        # Display the prediction for the current date
+        print(f'Predicted Energy Export for {current_date}: {prediction} kWh')
+
+        # Update input_sequence for the next iteration
+        current_date += timedelta(minutes=10)
+        input_sequence.append(generate_features(current_date))
+        input_sequence.pop(0)  # Remove the oldest values
+
     chart_data = pd.DataFrame({
         "Time": days,
         "Energy Produced in KWH": energy_produced,
