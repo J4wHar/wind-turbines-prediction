@@ -69,21 +69,11 @@ def main():
     last_day = last_day_of_month(input_date)
     current_date = input_date
 
-    while current_date <= last_day:
-        # Make prediction
-        prediction = predict_energy_export(model, input_sequence, scaler_X, scaler_y)
-
-        # Display the prediction for the current date
-        print(f'Predicted Energy Export for {current_date}: {prediction} kWh')
-
-        # Update input_sequence for the next iteration
-        current_date += timedelta(minutes=10)
-        input_sequence.append(generate_features(current_date))
-        input_sequence.pop(0)  # Remove the oldest values
+    prediction = predict_energy_export(model, input_sequence, scaler_X, scaler_y)
 
     chart_data = pd.DataFrame({
         "Time": days,
-        "Energy Produced in KWH": energy_produced,
+        "Energy Produced in KWH": prediction,
     })
 
     # Calculate energy button
